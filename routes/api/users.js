@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { BadRequest, Conflict, Unauthorized } = require("http-errors");
 
+const { authenticate } = require("../../middlewares");
 const { joiSchema } = require("../../models/user");
 const { User } = require("../../models");
 
@@ -57,9 +58,11 @@ router.post("/login", async (req, res, next) => {
     }
 
     const { _id, subscription } = user;
+
     const payload = {
       id: _id,
     };
+
     const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "1h" });
 
     await User.findByIdAndUpdate(_id, { token });
@@ -74,6 +77,26 @@ router.post("/login", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.get("/current", authenticate, async (req, res, next) => {
+  try {
+    const { email, subscription } = req.user;
+
+    res.json({
+      email,
+      subscription,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/logout", authenticate, async (req, res) => {
+  const { _id } = req.user;
+  await User.findByIdAndUpdate(_id, { token: null });
+
+  res.status(204).send();
 });
 
 module.exports = router;
