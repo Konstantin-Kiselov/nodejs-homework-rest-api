@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const { BadRequest, Conflict, Unauthorized } = require("http-errors");
 
 const { authenticate } = require("../../middlewares");
-const { joiSchema } = require("../../models/user");
+const { joiSchema, joiSubSchema } = require("../../models/user");
 const { User } = require("../../models");
 
 const router = express.Router();
@@ -97,6 +97,25 @@ router.get("/logout", authenticate, async (req, res) => {
   await User.findByIdAndUpdate(_id, { token: null });
 
   res.status(204).send();
+});
+
+router.patch("/", authenticate, async (req, res, next) => {
+  try {
+    const { error } = joiSubSchema.validate(req.body);
+    if (error) {
+      throw new BadRequest(error.message);
+    }
+    const { _id } = req.user;
+    const { subscription } = req.body;
+    const updateContact = await User.findByIdAndUpdate(
+      _id,
+      { subscription },
+      { new: true }
+    );
+    res.json(updateContact);
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;
