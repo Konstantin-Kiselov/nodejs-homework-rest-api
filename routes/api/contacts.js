@@ -1,24 +1,41 @@
 const express = require("express");
 const { NotFound, BadRequest } = require("http-errors");
 
+const { authenticate } = require("../../middlewares");
 const { joiSchema } = require("../../models/contact");
 const { Contact } = require("../../models");
 
 const router = express.Router();
 
-router.get("/", async (req, res, next) => {
+router.get("/", authenticate, async (req, res, next) => {
   try {
-    const contacts = await Contact.find();
+    const { page = 1, limit = 20, favorite = false } = req.query;
+    const { _id } = req.user;
+    const skip = (page - 1) * limit;
+
+    if (favorite) {
+      const contacts = await Contact.find(
+        { owner: _id, favorite },
+        "-createdAt -updatedAt",
+        { skip, limit: +limit }
+      );
+      return res.json(contacts);
+    }
+
+    const contacts = await Contact.find(
+      { owner: _id },
+      "-createdAt -updatedAt",
+      { skip, limit: +limit }
+    );
     res.json(contacts);
   } catch (error) {
     next(error);
   }
 });
 
-router.get("/:contactId", async (req, res, next) => {
+router.get("/:contactId", authenticate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
-    console.log(contactId);
     const contact = await Contact.findById(contactId);
 
     if (!contact) throw new NotFound("Not found");
@@ -31,12 +48,13 @@ router.get("/:contactId", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", authenticate, async (req, res, next) => {
   try {
     const { error } = joiSchema.validate(req.body);
     if (error) throw new BadRequest("missing required field");
 
-    const newContact = await Contact.create(req.body);
+    const { _id } = req.user;
+    const newContact = await Contact.create({ ...req.body, owner: _id });
 
     res.status(201).json(newContact);
   } catch (error) {
@@ -46,7 +64,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-router.delete("/:contactId", async (req, res, next) => {
+router.delete("/:contactId", authenticate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
     const deleteContact = await Contact.findByIdAndRemove(contactId);
@@ -59,7 +77,7 @@ router.delete("/:contactId", async (req, res, next) => {
   }
 });
 
-router.put("/:contactId", async (req, res, next) => {
+router.put("/:contactId", authenticate, async (req, res, next) => {
   try {
     const { error } = joiSchema.validate(req.body);
     if (error) throw new BadRequest("missing fields");
@@ -79,7 +97,7 @@ router.put("/:contactId", async (req, res, next) => {
   }
 });
 
-router.patch("/:contactId/favorite", async (req, res, next) => {
+router.patch("/:contactId/favorite", authenticate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
     const { favorite } = req.body;
