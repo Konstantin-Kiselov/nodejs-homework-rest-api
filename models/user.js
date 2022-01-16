@@ -26,7 +26,7 @@ const userSchema = Schema(
       type: String,
       default: null,
     },
-    avatarUrl: {
+    avatarURL: {
       type: String,
       default: "",
     },
