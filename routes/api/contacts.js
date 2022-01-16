@@ -36,7 +36,8 @@ router.get("/", authenticate, async (req, res, next) => {
 router.get("/:contactId", authenticate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
-    const contact = await Contact.findById(contactId);
+    const { _id } = req.user;
+    const contact = await Contact.findOne({ contactId, owner: _id });
 
     if (!contact) throw new NotFound("Not found");
 
@@ -67,7 +68,11 @@ router.post("/", authenticate, async (req, res, next) => {
 router.delete("/:contactId", authenticate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
-    const deleteContact = await Contact.findByIdAndRemove(contactId);
+    const { _id } = req.user;
+    const deleteContact = await Contact.findOneAndDelete({
+      contactId,
+      owner: _id,
+    });
 
     if (!deleteContact) throw new NotFound("Not found");
 
@@ -83,9 +88,14 @@ router.put("/:contactId", authenticate, async (req, res, next) => {
     if (error) throw new BadRequest("missing fields");
 
     const { contactId } = req.params;
-    const updateContact = await Contact.findByIdAndUpdate(contactId, req.body, {
-      new: true,
-    });
+    const { _id } = req.user;
+    const updateContact = await Contact.findOneAndUpdate(
+      { contactId, owner: _id },
+      req.body,
+      {
+        new: true,
+      }
+    );
 
     if (!updateContact) throw new NotFound("Not found");
 
@@ -101,13 +111,14 @@ router.patch("/:contactId/favorite", authenticate, async (req, res, next) => {
   try {
     const { contactId } = req.params;
     const { favorite } = req.body;
+    const { _id } = req.user;
 
     if (favorite === undefined) {
       throw new BadRequest("missing field favorite");
     }
 
-    const updateStatusContact = await Contact.findByIdAndUpdate(
-      contactId,
+    const updateStatusContact = await Contact.findOneAndUpdate(
+      { contactId, owner: _id },
       { favorite },
       {
         new: true,
