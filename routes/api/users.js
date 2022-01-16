@@ -2,14 +2,37 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { BadRequest, Conflict, Unauthorized } = require("http-errors");
+const gravatar = require("gravatar");
 
-const { authenticate } = require("../../middlewares");
+const path = require("path");
+const fs = require("fs/promises");
+
+const { authenticate, upload } = require("../../middlewares");
 const { joiSchema, joiSubSchema } = require("../../models/user");
 const { User } = require("../../models");
 
 const router = express.Router();
 
 const { SECRET_KEY } = process.env;
+
+router.post("/", upload.single("avatar"), async (req, res, next) => {
+  try {
+    console.log(req.file.path);
+    const { path: pathFile, filename } = req.file;
+    const fileUpload = path.join(
+      __dirname,
+      "../../",
+      "public",
+      "avatars",
+      filename
+    );
+    console.log(fileUpload);
+    await fs.rename(pathFile, fileUpload);
+  } catch (error) {
+    fs.unlink(req.file.path);
+    next(error);
+  }
+});
 
 router.post("/register", async (req, res, next) => {
   try {
@@ -24,9 +47,16 @@ router.post("/register", async (req, res, next) => {
       throw new Conflict("Email in use");
     }
 
+    const avatarUrl = gravatar.url(email);
+    console.log(avatarUrl);
+
     const salt = await bcrypt.genSalt(10);
     const hashPass = await bcrypt.hash(password, salt);
-    const newUser = await User.create({ ...req.body, password: hashPass });
+    const newUser = await User.create({
+      ...req.body,
+      password: hashPass,
+      avatarUrl,
+    });
 
     res.status(201).json({
       user: {
