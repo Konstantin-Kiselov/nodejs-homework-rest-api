@@ -2,14 +2,20 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { BadRequest, Conflict, Unauthorized } = require("http-errors");
+const gravatar = require("gravatar");
+const Jimp = require("jimp");
+const path = require("path");
+const fs = require("fs/promises");
 
-const { authenticate } = require("../../middlewares");
+const { authenticate, upload } = require("../../middlewares");
 const { joiSchema, joiSubSchema } = require("../../models/user");
 const { User } = require("../../models");
 
 const router = express.Router();
 
 const { SECRET_KEY } = process.env;
+
+const avatarsDir = path.join(__dirname, "../../", "public", "avatars");
 
 router.post("/register", async (req, res, next) => {
   try {
@@ -24,9 +30,16 @@ router.post("/register", async (req, res, next) => {
       throw new Conflict("Email in use");
     }
 
+    const avatarURL = gravatar.url(email);
+
     const salt = await bcrypt.genSalt(10);
     const hashPass = await bcrypt.hash(password, salt);
-    const newUser = await User.create({ ...req.body, password: hashPass });
+
+    const newUser = await User.create({
+      ...req.body,
+      password: hashPass,
+      avatarURL,
+    });
 
     res.status(201).json({
       user: {
@@ -117,5 +130,39 @@ router.patch("/", authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+router.patch(
+  "/avatars",
+  authenticate,
+  upload.single("avatar"),
+  async (req, res, next) => {
+    try {
+      const { _id } = req.user;
+      const { path: tmpUpload, filename } = req.file;
+
+      const [extension] = filename.split(".").reverse();
+      const newFileName = `${_id}.${extension}`;
+
+      const fileUpload = path.join(avatarsDir, newFileName);
+      const avatarURL = path.join("public", "avatars", newFileName);
+
+      await Jimp.read(tmpUpload)
+        .then((avatar) => {
+          return avatar.resize(250, 250).write(tmpUpload);
+        })
+        .catch((err) => {
+          throw err;
+        });
+
+      await fs.rename(tmpUpload, fileUpload);
+      await User.findByIdAndUpdate(_id, { avatarURL }, { new: true });
+
+      res.json({ avatarURL });
+    } catch (error) {
+      fs.unlink(req.file.path);
+      next(error);
+    }
+  }
+);
 
 module.exports = router;
