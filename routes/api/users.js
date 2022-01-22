@@ -1,19 +1,21 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { BadRequest, Conflict, Unauthorized } = require("http-errors");
+const { BadRequest, Conflict, Unauthorized, NotFound } = require("http-errors");
 const gravatar = require("gravatar");
 const Jimp = require("jimp");
+const { v4 } = require("uuid");
 const path = require("path");
 const fs = require("fs/promises");
 
 const { authenticate, upload } = require("../../middlewares");
 const { joiSchema, joiSubSchema } = require("../../models/user");
 const { User } = require("../../models");
+const { sendEmail } = require("../../helpers");
 
 const router = express.Router();
 
-const { SECRET_KEY } = process.env;
+const { SECRET_KEY, SITE_NAME } = process.env;
 
 const avatarsDir = path.join(__dirname, "../../", "public", "avatars");
 
@@ -34,12 +36,22 @@ router.post("/register", async (req, res, next) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashPass = await bcrypt.hash(password, salt);
+    const verificationToken = v4();
 
     const newUser = await User.create({
       ...req.body,
-      password: hashPass,
       avatarURL,
+      password: hashPass,
+      verificationToken,
     });
+
+    const data = {
+      to: email,
+      subject: "Подтверждение регистрации",
+      html: `<a target="_blank" href="${SITE_NAME}/api/users/verify/${verificationToken}">Подтвердить email</a>`,
+    };
+
+    await sendEmail(data);
 
     res.status(201).json({
       user: {
@@ -47,6 +59,25 @@ router.post("/register", async (req, res, next) => {
         subscription: newUser.subscription,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/verify/:verificationToken", async (req, res, next) => {
+  try {
+    const { verificationToken } = req.params;
+    console.log(verificationToken);
+    const user = await User.findOne({ verificationToken });
+    if (!user) {
+      throw new NotFound("User not found");
+    }
+    await User.findByIdAndUpdate(user._id, {
+      verificationToken: null,
+      verify: true,
+    });
+
+    res.json({ message: "Verification successful" });
   } catch (error) {
     next(error);
   }
