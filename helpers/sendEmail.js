@@ -10,12 +10,9 @@ const sendEmail = async (data) => {
     const email = { ...data, from: "constantine.kiss@gmail.com" };
 
     await sgMail.send(email);
-    console.log(email);
-    console.log("Email send success");
     return true;
   } catch (error) {
-    console.log(error);
-    throw error;
+    if (error) throw error;
   }
 };
 

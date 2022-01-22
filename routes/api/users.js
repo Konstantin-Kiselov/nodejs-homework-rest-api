@@ -67,7 +67,6 @@ router.post("/register", async (req, res, next) => {
 router.get("/verify/:verificationToken", async (req, res, next) => {
   try {
     const { verificationToken } = req.params;
-    console.log(verificationToken);
     const user = await User.findOne({ verificationToken });
     if (!user) {
       throw new NotFound("User not found");
