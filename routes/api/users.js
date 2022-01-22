@@ -83,6 +83,31 @@ router.get("/verify/:verificationToken", async (req, res, next) => {
   }
 });
 
+router.post("/verify", async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) throw new BadRequest("missing required field email");
+
+    const user = await User.findOne({ email });
+    if (!user) throw new NotFound("User not found");
+
+    const { verificationToken, verify } = user;
+    if (verify) throw new BadRequest("Verification has already been passed");
+
+    const data = {
+      to: email,
+      subject: "Подтверждение регистрации",
+      html: `<a target="_blank" href="${SITE_NAME}/api/users/verify/${verificationToken}">Подтвердить email</a>`,
+    };
+
+    await sendEmail(data);
+
+    res.json({ message: "Verification email sent" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/login", async (req, res, next) => {
   try {
     const { error } = joiSchema.validate(req.body);
@@ -96,12 +121,17 @@ router.post("/login", async (req, res, next) => {
     if (!user) {
       throw new Unauthorized("Email or password is wrong");
     }
+
+    const { _id, subscription, verify } = user;
+
+    if (!verify) {
+      throw new Unauthorized("Email not verify");
+    }
+
     const passwordCompare = await bcrypt.compare(password, user.password);
     if (!passwordCompare) {
       throw new Unauthorized("Email or password is wrong");
     }
-
-    const { _id, subscription } = user;
 
     const payload = {
       id: _id,
